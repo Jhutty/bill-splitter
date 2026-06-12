@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Splitter — Split bills, not friendships</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   RESET & TOKENS
+═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: none; border: none; cursor: pointer; }
+input, textarea { outline: none; }
+ul, ol { list-style: none; }
+input[type=date]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
+
+:root {
+  --paper:       #F7F4EE;
+  --paper-warm:  #EDE8DF;
+  --paper-deep:  #E4DDD2;
+  --ink:         #1A1714;
+  --ink-mid:     #4A4540;
+  --ink-muted:   #7A7470;
+  --rule:        #D8D0C4;
+  --rule-light:  #EBE5DC;
+  --rust:        #C0442A;
+  --rust-light:  #F5EAE7;
+  --rust-pale:   #FAF2F0;
+  --settled:     #6B9B7A;
+  --settled-bg:  #EEF4EF;
+  --white:       #FFFFFF;
+  --shadow-lg:   0 16px 48px rgba(26,23,20,0.18), 0 2px 8px rgba(26,23,20,0.08);
+  --radius-sm:   3px;
+  --radius-md:   6px;
+  --radius-xl:   24px;
+  --serif:       'Playfair Display', Georgia, serif;
+  --sans:        'IBM Plex Sans', system-ui, sans-serif;
+  --mono:        'IBM Plex Mono', 'Courier New', monospace;
+  --ease:        cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --t:           160ms;
+}
+
+/* ═══════════════════════════════════════════
+   BASE
+═══════════════════════════════════════════ */
+html { font-size: 16px; -webkit-font-smoothing: antialiased; height: 100%; }
+body {
+  font-family: var(--sans);
+  background: var(--paper-deep);
+  color: var(--ink);
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* ═══════════════════════════════════════════
+   APP SHELL — phone frame on desktop
+═══════════════════════════════════════════ */
+.app-shell {
+  width: 100%;
+  max-width: 480px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  body { padding: 28px 0; min-height: 100dvh; }
+  .app-shell {
+    height: min(820px, calc(100dvh - 56px));
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   SCREEN SYSTEM
+═══════════════════════════════════════════ */
+.screen {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  inset: 0;
+  background: var(--paper);
+  overflow: hidden;
+}
+.screen.active {
+  display: flex;
+  position: relative;
+  flex: 1;
+  height: 100%;
+}
+
+.screen-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.screen-body::-webkit-scrollbar { display: none; }
+
+/* ═══════════════════════════════════════════
+   NAV HEADER
+═══════════════════════════════════════════ */
+.nav {
+  padding: 14px 20px 12px;
+  border-bottom: 2px solid var(--ink);
+  flex-shrink: 0;
+  background: var(--paper);
+  z-index: 10;
+}
+.nav-back {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  width: fit-content;
+  border: none;
+  background: none;
+  padding: 0;
+  transition: color var(--t) var(--ease);
+}
+.nav-back:hover { color: var(--rust); }
+.nav-back svg { width: 11px; height: 11px; flex-shrink: 0; }
+.nav-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+}
+.nav-title {
+  font-family: var(--serif);
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-end; }
+
+/* ═══════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.btn:disabled { opacity: 0.4; pointer-events: none; }
+
+.btn-primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn-primary:hover { background: var(--ink-mid); border-color: var(--ink-mid); }
+
+.btn-outline { background: transparent; color: var(--rust); border-color: var(--rust); }
+.btn-outline:hover { background: var(--rust-light); }
+
+.btn-ghost { background: transparent; color: var(--ink-muted); border-color: var(--rule); }
+.btn-ghost:hover { border-color: var(--ink-muted); color: var(--ink); }
+
+.btn-danger { background: transparent; color: var(--rust); border-color: var(--rust); }
+.btn-danger:hover { background: var(--rust); color: var(--white); }
+
+.btn-icon {
+  padding: 6px 8px;
+  background: transparent;
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--t), color var(--t);
+}
+.btn-icon:hover { border-color: var(--ink-muted); color: var(--ink); }
+.btn-icon svg { width: 13px; height: 13px; }
+
+.btn-full { width: 100%; padding: 13px; font-size: 12px; letter-spacing: 0.12em; }
+
+/* ═══════════════════════════════════════════
+   FORM
+═══════════════════════════════════════════ */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.field-input {
+  background: var(--white);
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--ink);
+  width: 100%;
+  transition: border-color var(--t) var(--ease);
+  -webkit-appearance: none;
+}
+.field-input:focus { border-color: var(--ink); }
+.field-input.is-error { border-color: var(--rust) !important; }
+.field-input::placeholder { color: var(--ink-muted); opacity: 0.5; }
+.field-mono { font-family: var(--mono); }
+.field-hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+.field-error { font-family: var(--mono); font-size: 10px; color: var(--rust); }
+
+.amount-wrap { position: relative; display: flex; align-items: center; }
+.amount-prefix {
+  position: absolute;
+  left: 12px;
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--ink-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+.amount-wrap .field-input { padding-left: 24px; }
+
+/* Mini amount inputs (payer/split rows) */
+.mini-wrap { position: relative; width: 88px; flex-shrink: 0; }
+.mini-prefix {
+  position: absolute;
+  left: 9px; top: 50%; transform: translateY(-50%);
+  font-family: var(--mono); font-size: 12px;
+  color: var(--ink-muted); pointer-events: none; z-index: 1;
+}
+.mini-input {
+  width: 100%;
+  background: var(--white);
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px 7px 20px;
+  font-family: var(--mono);
+  font-size: 13px;
+  text-align: right;
+  -webkit-appearance: none;
+  transition: border-color var(--t);
+}
+.mini-input:focus { border-color: var(--ink); }
+.mini-input.is-error { border-color: var(--rust); }
+.mini-input:disabled { opacity: 0.35; background: var(--paper-warm); }
+
+/* ═══════════════════════════════════════════
+   SECTION LABEL
+═══════════════════════════════════════════ */
+.section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 13px 20px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.section-pad { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.section-pad + .section-pad { border-top: 1px solid var(--rule); }
+
+/* ═══════════════════════════════════════════
+   HOME
+═══════════════════════════════════════════ */
+.home-header {
+  padding: 16px 20px 14px;
+  border-bottom: 2px solid var(--ink);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.wordmark {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.settings-link {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-muted); cursor: pointer;
+  padding: 5px 0 0;
+  transition: color var(--t);
+}
+.settings-link:hover { color: var(--ink); }
+.settings-link svg { width: 13px; height: 13px; }
+
+.group-card {
+  display: flex; align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--rule);
+  gap: 13px; cursor: pointer;
+  transition: background var(--t) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.group-card:hover { background: var(--rust-pale); }
+.group-card:active { background: var(--rust-light); }
+
+.group-emoji {
+  font-size: 21px;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.group-info { flex: 1; min-width: 0; }
+.group-name {
+  font-family: var(--serif);
+  font-size: 17px; font-weight: 600;
+  margin-bottom: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.group-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-muted); }
+.group-balance { font-family: var(--mono); font-size: 12px; font-weight: 500; text-align: right; flex-shrink: 0; line-height: 1.4; }
+.group-balance.owed { color: var(--rust); }
+.group-balance.settled { color: var(--settled); }
+.group-balance .bal-sub { font-size: 9px; opacity: 0.75; display: block; margin-top: 2px; }
+
+.dashed-btn {
+  margin: 14px 20px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--rule);
+  border-radius: var(--radius-md);
+  font-size: 13px; color: var(--ink-muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: border-color var(--t), color var(--t), background var(--t);
+  background: transparent;
+  width: calc(100% - 40px);
+}
+.dashed-btn:hover { border-color: var(--rust); color: var(--rust); background: var(--rust-pale); }
+.dashed-btn .plus { color: var(--rust); font-size: 18px; line-height: 1; font-weight: 300; }
+
+/* empty state */
+.empty-state {
+  padding: 44px 28px;
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.empty-icon { font-size: 50px; display: block; margin-bottom: 6px; animation: bob 3s ease-in-out infinite; }
+@keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+.empty-state h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
+.empty-state p { font-size: 14px; color: var(--ink-muted); line-height: 1.55; max-width: 260px; }
+
+/* ═══════════════════════════════════════════
+   GROUP DETAIL
+═══════════════════════════════════════════ */
+.people-bar {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule);
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  background: var(--white);
+  flex-shrink: 0;
+}
+.chip {
+  font-family: var(--mono); font-size: 11px;
+  border-radius: 20px; padding: 4px 10px;
+  border: 1px solid var(--rule);
+  background: var(--paper); color: var(--ink);
+  white-space: nowrap; line-height: 1.4;
+}
+.chip-add {
+  background: none; border-style: dashed;
+  color: var(--ink-muted); cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+}
+.chip-add:hover { border-color: var(--rust); color: var(--rust); }
+
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid var(--ink);
+  flex-shrink: 0;
+}
+.tab {
+  flex: 1; padding: 11px;
+  text-align: center;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-muted); cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color var(--t), border-color var(--t);
+  -webkit-tap-highlight-color: transparent;
+}
+.tab.active { color: var(--ink); border-bottom-color: var(--rust); }
+
+.expense-row {
+  display: flex; align-items: center;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--rule);
+  gap: 12px; cursor: pointer;
+  transition: background var(--t) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.expense-row:hover { background: var(--rust-pale); }
+.expense-row:active { background: var(--rust-light); }
+.expense-info { flex: 1; min-width: 0; }
+.expense-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.expense-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.expense-amount { font-family: var(--mono); font-size: 15px; font-weight: 500; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════
+   SETTLEMENT
+═══════════════════════════════════════════ */
+.settle-header {
+  background: var(--white);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+.settle-total-label {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 3px;
+}
+.settle-total-amount {
+  font-family: var(--serif); font-size: 34px; font-weight: 600; line-height: 1;
+}
+.settle-total-sub {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-muted); margin-top: 5px;
+}
+
+.debt-row {
+  display: flex; align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--rule);
+  gap: 12px;
+  transition: background var(--t), opacity var(--t);
+}
+.debt-row.is-settled { background: var(--settled-bg); }
+
+@keyframes settle-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.98); }
+  70%  { transform: scale(1.01); }
+  100% { transform: scale(1); }
+}
+.debt-row.settling { animation: settle-pop 0.35s var(--ease) forwards; }
+
+.debt-names { flex: 1; min-width: 0; }
+.debt-from { font-size: 14px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.debt-to { font-family: var(--mono); font-size: 10px; color: var(--ink-muted); }
+.debt-amount { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--rust); flex-shrink: 0; }
+.debt-amount.paid { color: var(--settled); text-decoration: line-through; opacity: 0.7; }
+.is-settled .debt-from { color: var(--settled); }
+
+.settle-btn {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+  padding: 5px 10px;
+  border: 1px solid var(--rust); color: var(--rust);
+  border-radius: var(--radius-sm); background: none; cursor: pointer;
+  flex-shrink: 0; transition: background var(--t), color var(--t);
+  white-space: nowrap;
+}
+.settle-btn:hover { background: var(--rust-light); }
+.settle-btn.done { border-color: var(--settled); color: var(--settled); }
+.settle-btn.done:hover { background: var(--settled-bg); }
+
+.settled-all {
+  padding: 32px 20px;
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.settled-all .icon { font-size: 42px; }
+.settled-all h3 { font-family: var(--serif); font-size: 20px; font-weight: 600; }
+.settled-all p { font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+
+.share-bar { padding: 16px 20px; border-top: 1px solid var(--rule); }
+
+/* ═══════════════════════════════════════════
+   EMOJI PICKER
+═══════════════════════════════════════════ */
+.emoji-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.emoji-opt {
+  width: 40px; height: 40px; font-size: 21px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-sm);
+  cursor: pointer; background: var(--white);
+  transition: border-color var(--t), background var(--t);
+}
+.emoji-opt:hover { border-color: var(--ink-mid); }
+.emoji-opt.selected { border-color: var(--rust); background: var(--rust-pale); }
+
+/* ═══════════════════════════════════════════
+   WIZARD
+═══════════════════════════════════════════ */
+.wizard-progress {
+  display: flex; gap: 4px;
+  padding: 10px 20px 0;
+  flex-shrink: 0;
+}
+.pip {
+  height: 3px; flex: 1; border-radius: 2px;
+  background: var(--rule);
+  transition: background 0.3s ease;
+}
+.pip.done { background: var(--rust); }
+
+.wizard-step-label {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 12px 20px 4px;
+}
+
+.wizard-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--rule);
+  display: flex; gap: 8px;
+  flex-shrink: 0; background: var(--paper);
+}
+
+/* mode toggle (one payer / split) */
+.mode-toggle {
+  display: flex;
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  width: fit-content;
+}
+.mode-opt {
+  padding: 6px 12px; cursor: pointer;
+  color: var(--ink-muted); white-space: nowrap;
+  transition: background var(--t), color var(--t);
+}
+.mode-opt.active { background: var(--ink); color: var(--paper); }
+.mode-opt + .mode-opt { border-left: 1.5px solid var(--rule); }
+
+/* payer / split row */
+.input-row {
+  display: flex; align-items: center;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--rule);
+  gap: 12px;
+}
+.input-row-name { flex: 1; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.input-row-badge {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--rust); font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* running total */
+.running-bar {
+  padding: 11px 20px;
+  background: var(--paper-warm);
+  border-bottom: 1px solid var(--rule);
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 11px;
+  flex-shrink: 0;
+}
+.running-label { color: var(--ink-muted); }
+.running-val { font-weight: 500; }
+.running-val.ok { color: var(--settled); }
+.running-val.over { color: var(--rust); }
+.running-val.under { color: var(--ink); }
+
+/* split shortcuts */
+.shortcut-bar {
+  padding: 9px 20px;
+  border-bottom: 1px solid var(--rule);
+  display: flex; gap: 7px; flex-shrink: 0;
+}
+
+/* review screen */
+.review-block {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.review-block-title {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 10px;
+}
+.review-line {
+  display: flex; justify-content: space-between;
+  padding: 5px 0; border-bottom: 1px solid var(--rule-light);
+  font-size: 14px;
+}
+.review-line:last-child { border-bottom: none; }
+.review-val { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+.review-sub { font-family: var(--mono); font-size: 11px; color: var(--ink-muted); padding: 3px 0; }
+
+/* ═══════════════════════════════════════════
+   EXPENSE DETAIL
+═══════════════════════════════════════════ */
+.detail-hero {
+  padding: 18px 20px;
+  background: var(--white);
+  border-bottom: 1px solid var(--rule);
+}
+.detail-amount { font-family: var(--serif); font-size: 38px; font-weight: 600; line-height: 1; }
+.detail-date { font-family: var(--mono); font-size: 11px; color: var(--ink-muted); margin-top: 5px; }
+
+/* ═══════════════════════════════════════════
+   PEOPLE SCREEN
+═══════════════════════════════════════════ */
+.person-row {
+  display: flex; align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--rule);
+  gap: 12px;
+}
+.person-name { flex: 1; font-size: 14px; font-weight: 500; }
+.person-remove {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 4px 9px;
+  border: 1px solid var(--rule); border-radius: var(--radius-sm);
+  color: var(--ink-muted); cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+}
+.person-remove:hover:not(:disabled) { border-color: var(--rust); color: var(--rust); }
+.person-remove:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(26,23,20,0.52);
+  z-index: 100;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.modal-overlay.open { display: flex; }
+
+.modal-sheet {
+  background: var(--paper);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  width: 100%; max-width: 480px;
+  padding: 18px 20px 24px;
+  animation: slide-up 0.22s var(--ease) forwards;
+  max-height: 80dvh; overflow-y: auto;
+}
+@keyframes slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.modal-handle {
+  width: 34px; height: 4px;
+  background: var(--rule); border-radius: 2px;
+  margin: 0 auto 16px;
+}
+.modal-title { font-family: var(--serif); font-size: 21px; font-weight: 600; margin-bottom: 10px; }
+.modal-body { font-size: 14px; color: var(--ink-mid); line-height: 1.55; margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 9px; }
+.modal-actions .btn { flex: 1; }
+
+@media (min-width: 640px) {
+  .modal-overlay { align-items: center; }
+  .modal-sheet { border-radius: var(--radius-xl); max-width: 420px; }
+}
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+.toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  padding: 9px 18px; border-radius: 20px;
+  z-index: 200; opacity: 0;
+  transition: transform 0.28s var(--ease), opacity 0.28s var(--ease);
+  white-space: nowrap; pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ═══════════════════════════════════════════
+   CONFETTI
+═══════════════════════════════════════════ */
+#confetti-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 300; display: none;
+}
+
+/* ═══════════════════════════════════════════
+   DANGER ZONE
+═══════════════════════════════════════════ */
+.danger-zone {
+  padding: 18px 20px;
+  border-top: 1px solid var(--rule);
+}
+.danger-label {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 12px;
+}
+
+/* ═══════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════ */
+.hidden { display: none !important; }
+.mt-10 { margin-top: 10px; }
+.color-settled { color: var(--settled); }
+.color-rust { color: var(--rust); }
+.color-muted { color: var(--ink-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+
+<div class="app-shell" id="app">
+
+  <!-- ──────────────────────────────────────
+       SCREEN: HOME
+  ────────────────────────────────────────── -->
+  <div class="screen active" id="screen-home">
+    <div class="home-header">
+      <div class="wordmark">Splitter</div>
+      <button class="settings-link" onclick="Nav.go('settings')">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="7" cy="7" r="2.3"/>
+          <path d="M7 1.2v1.4M7 11.4v1.4M1.2 7h1.4M11.4 7h1.4M2.9 2.9l1 1M10.1 10.1l1 1M11.1 2.9l-1 1M3.9 10.1l-1 1"/>
+        </svg>
+        Settings
+      </button>
+    </div>
+    <div class="screen-body" id="home-body"></div>
+  </div>
+
+  <!-- ──────────────────────────────────────
+       SCREEN: SETTINGS
+  ────────────────────────────────────────── -->
+  <div class="screen" id="screen-settings">
+    <div class="nav">
+      <button class="nav-back" onclick="Nav.go('home')">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>
+        Back
+      </button>
+      <div class="nav-row"><div class="nav-title">Settings</div></div>
+    </div>
+    <div class="screen-body">
+      <div class="section-pad">
+        <div class="field">
+          <div class="field-label">Your name ("me" in this app)</div>
+          <input type="text" class="field-input" id="s-me" placeholder="e.g. Alex" maxlength="30"
+            onkeydown="if(event.key==='Enter')Screens.settings.save()">
+          <div class="field-hint">Pre-selects you as payer when adding a new expense.</div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="Screens.settings.save()">Save settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────
+       SCREEN: GROUP FORM (create / edit)
+  ────────────────────────────────────────── -->
+  <div class="screen" id="screen-group-form">
+    <div class="nav">
+      <button class="nav-back" id="gf-back">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>
+        Back
+      </button>
+      <div class="nav-row"><div class="nav-title" id="gf-title">New group</div></div>
+    </div>
+    <div class="screen-body">
+      <div class="section-pad">
+        <div class="field">
+          <div class="field-label">Group name</div>
+          <input type="text" class="field-input" id="gf-name" placeholder="e.g. Mexico Trip" maxlength="40"
+            onkeydown="if(event.key==='Enter')Screens.groupForm.save()">
+        </div>
+        <div class="field">
+          <div class="field-label">Icon</div>
+          <div class="emoji-grid" id="gf-emoji-grid"></div>
+        </div>
+        <button class="btn btn-primary btn-full" id="gf-submit" onclick="Screens.groupForm.save()">Create group</button>
+      </div>
+      <div class="danger-zone hidden" id="gf-danger">
+        <div class="danger-label">Danger zone</div>
+        <button class="btn btn-danger btn-full" onclick="Screens.groupForm.confirmDelete()">Delete this group</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────
+       SCREEN: GROUP DETAIL
+  ────────────────────────────────────────── -->
+  <div class="screen" id="screen-group">
+    <div class="nav">
+      <button class="nav-back" onclick="Nav.go('home')">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>
+        Groups
+      </button>
+      <div class="nav-row">
+        <div class="nav-title" id="group-title">Group</div>
+        <div class="nav-actions">
+          <button class="btn-icon" onclick="Screens.groupForm.open(State.groupId)" title="Edit group">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z"/></svg>
+          </button>
+          <button class="btn btn-outline" onclick="Wizard.start(null)">+ Expense</button>
+        </div>
+      </div>
+    </div>
+    <div class="people-bar" id="people-bar"></div>
+    <div class="tab-bar">
+      <div class="tab active" id="tab-exp" onclick="Group.switchTab('expenses')">Expenses</div>
+      <div class="tab" id="tab-set" onclick="Group.switchTab('settlement')">Settlement</div>
+    </div>
+    <div class="screen-body" id="group-body"></div>
+  </div>
+
+  <!-- ──────────────────────────────────────
+       SCREEN: MANAGE PEOPLE
+  ────────────────────────────────────────── -->
+  <div class="screen" id="screen-people">
+    <div class="nav">
+      <button class="nav-back" onclick="Nav.go('group')">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>
+        Back
+      </button>
+      <div class="nav-row"><div class="nav-title">People</div></div>
+    </div>
+    <div class="screen-body">
+      <div id="people-list"></div>
+      <div class="section-pad" style="border-top:1px solid var(--rule)">
+        <div class="field-label" style="margin-bottom:0">Add person</div>
+        <div class="field">
+          <input type="text" class="field-input" id="add-person-input"
+            placeholder="Name" maxlength="30"
+            onkeydown="if(event.key==='Enter')People.add()">
+        </div>
+        <button class="btn btn-outline btn-full" onclick="People.add()">Add to group</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────
+       SCREEN: ADD / EDIT EXPENSE WIZARD
+  ────────────────────────────────────────── -->
+  <div class="screen" id="screen-wizard">
+    <div class="nav">
+      <button class="nav-back" id="wiz-back">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>
+        <span id="wiz-back-label">Back</span>
+      </button>
+      <div class="nav-row"><div class="nav-title" id="wiz-title">New expense</div></div>
+    </div>
+    <div class="wizard-progress" id="wiz-progress"></div>
+    <div class="screen-body" id="wiz-body"></div>
+    <div class="wizard-footer" id="wiz-footer"></div>
+  </div>
+
+  <!-- ──────────────────────────────────────
+       SCREEN: EXPENSE DETAIL
+  ────────────────────────────────────────── -->
+  <div class="screen" id="screen-expense-detail">
+    <div class="nav">
+      <button class="nav-back" onclick="Nav.go('group')">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>
+        Back
+      </button>
+      <div class="nav-row">
+        <div class="nav-title" id="detail-nav-title">Expense</div>
+        <div class="nav-actions">
+          <button class="btn-icon" onclick="Wizard.start(State.expenseId)" title="Edit">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z"/></svg>
+          </button>
+          <button class="btn btn-danger" onclick="Expenses.confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="screen-body" id="detail-body"></div>
+  </div>
+
+</div><!-- end app-shell -->
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="Modal.onOverlay(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════════════════════ */
+const STORAGE_KEY  = 'splitapp_v1';
+const SETTINGS_KEY = 'splitapp_settings_v1';
+const EMOJIS = ['✈️','🏖️','🍕','🎿','🎂','🏕️','🎉','🏠','⛺','🌊','🥂','🍔','🛳️','🎮','🏋️','🌮','💐','🎵','🎪','🎯'];
+
+/* ═══════════════════════════════════════════════════════════════════
+   DATA LAYER
+═══════════════════════════════════════════════════════════════════ */
+const DB = {
+  load() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { groups: [] }; }
+    catch { return { groups: [] }; }
+  },
+  save(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); },
+  loadSettings() {
+    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || { me: '' }; }
+    catch { return { me: '' }; }
+  },
+  saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); },
+};
+
+let appData    = DB.load();
+let settings   = DB.loadSettings();
+
+const State = { groupId: null, expenseId: null, activeTab: 'expenses' };
+
+function getGroup(id)   { return appData.groups.find(g => g.id === id); }
+function getExpense(gid, eid) { return getGroup(gid)?.expenses.find(e => e.id === eid); }
+function touch(group)   { group.updatedAt = new Date().toISOString(); DB.save(appData); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════════ */
+function uid() {
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16));
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Stores cents as integers. Parses "$12.50" or "12.50" or 12.5
+function toCents(v) {
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? 0 : Math.round(n * 100);
+}
+
+function fmtMoney(cents) {
+  return '€' + (Math.abs(cents) / 100).toFixed(2);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso.length === 10 ? iso + 'T12:00:00' : iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return iso; }
+}
+
+function personName(g, pid) { return g.people.find(p => p.id === pid)?.name ?? 'Unknown'; }
+
+function svgBack() {
+  return `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2L4 6l4 4"/></svg>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SETTLEMENT ALGORITHM
+═══════════════════════════════════════════════════════════════════ */
+function computeRawDebts(group) {
+  // 1. Compute net balance per person from expenses only
+  const bal = {};
+  for (const p of group.people) bal[p.id] = 0;
+  for (const e of group.expenses) {
+    for (const pay of e.payers) bal[pay.personId] = (bal[pay.personId] ?? 0) + pay.amount;
+    for (const spl of e.splits)  bal[spl.personId] = (bal[spl.personId] ?? 0) - spl.amount;
+  }
+
+  // 2. Minimise transactions (greedy)
+  const creds = [], debs = [];
+  for (const [id, v] of Object.entries(bal)) {
+    if (v >  1) creds.push({ id, v }); // >1 cent to avoid float dust
+    if (v < -1) debs.push({ id, v: -v });
+  }
+  creds.sort((a,b) => b.v - a.v);
+  debs.sort((a,b) => b.v - a.v);
+
+  const debts = [];
+  let ci = 0, di = 0;
+  while (ci < creds.length && di < debs.length) {
+    const c = creds[ci], d = debs[di];
+    const amt = Math.min(c.v, d.v);
+    if (amt > 0) debts.push({ fromId: d.id, toId: c.id, amount: amt });
+    c.v -= amt; d.v -= amt;
+    if (c.v <= 1) ci++;
+    if (d.v <= 1) di++;
+  }
+  return debts;
+}
+
+function getDebtsWithStatus(group) {
+  const rawDebts = computeRawDebts(group);
+
+  // Active settlements map: fromId+toId -> [settlement, ...]
+  const settlements = group.settlements ?? [];
+
+  return rawDebts.map(d => {
+    // Find a matching active settlement
+    const s = settlements.find(s =>
+      s.active && s.fromPersonId === d.fromId && s.toPersonId === d.toId && s.amount === d.amount
+    );
+    return { ...d, settled: !!s, settlementId: s?.id ?? null };
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════════════════ */
+const SCREEN_IDS = ['home','settings','group-form','group','people','wizard','expense-detail'];
+
+const Nav = {
+  go(screenId) {
+    for (const id of SCREEN_IDS) {
+      document.getElementById(`screen-${id}`).classList.toggle('active', id === screenId);
+    }
+    // Trigger render
+    if (screenId === 'home')   Screens.home.render();
+    if (screenId === 'group')  Group.render();
+    if (screenId === 'people') People.render();
+    if (screenId === 'settings') {
+      document.getElementById('s-me').value = settings.me ?? '';
+    }
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   HOME SCREEN
+═══════════════════════════════════════════════════════════════════ */
+const Screens = {
+  home: {
+    render() {
+      appData = DB.load();
+      const body = document.getElementById('home-body');
+      const groups = [...appData.groups].sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+      if (!groups.length) {
+        body.innerHTML = `
+          <div class="empty-state">
+            <span class="empty-icon">🌴</span>
+            <h2>No groups yet</h2>
+            <p>Create your first group to start splitting expenses with friends.</p>
+            <button class="btn btn-primary mt-10" onclick="Screens.groupForm.open(null)">Start a group</button>
+          </div>`;
+        return;
+      }
+
+      let h = '<div class="section-label">Your groups</div>';
+      for (const g of groups) {
+        const total     = g.expenses.reduce((s,e)=>s+e.totalAmount, 0);
+        const debts     = getDebtsWithStatus(g);
+        const owed      = debts.filter(d=>!d.settled).reduce((s,d)=>s+d.amount,0);
+        const allDone   = debts.filter(d=>!d.settled).length === 0 && g.expenses.length > 0;
+        const noExp     = g.expenses.length === 0;
+
+        let balHtml;
+        if (noExp)        balHtml = `<div class="group-balance color-muted">No expenses<span class="bal-sub">yet</span></div>`;
+        else if (allDone) balHtml = `<div class="group-balance settled">All settled<span class="bal-sub">✓</span></div>`;
+        else              balHtml = `<div class="group-balance owed">${fmtMoney(owed)}<span class="bal-sub">outstanding</span></div>`;
+
+        h += `<div class="group-card" onclick="Screens.home.open('${g.id}')">
+          <div class="group-emoji">${g.emoji??'💰'}</div>
+          <div class="group-info">
+            <div class="group-name">${esc(g.name)}</div>
+            <div class="group-meta">${g.people.length} ${g.people.length===1?'person':'people'} · ${g.expenses.length} ${g.expenses.length===1?'expense':'expenses'}</div>
+          </div>
+          ${balHtml}
+        </div>`;
+      }
+      h += `<button class="dashed-btn" onclick="Screens.groupForm.open(null)"><span class="plus">+</span> New group</button>`;
+      body.innerHTML = h;
+    },
+
+    open(gid) {
+      State.groupId  = gid;
+      State.activeTab = 'expenses';
+      Nav.go('group');
+    },
+  },
+
+  settings: {
+    save() {
+      settings.me = document.getElementById('s-me').value.trim();
+      DB.saveSettings(settings);
+      Toast.show('Settings saved');
+      Nav.go('home');
+    },
+  },
+
+  groupForm: {
+    _editId: null,
+    _emoji: '✈️',
+
+    open(groupId) {
+      this._editId = groupId;
+      const g = groupId ? getGroup(groupId) : null;
+      this._emoji = g?.emoji ?? '✈️';
+
+      document.getElementById('gf-title').textContent   = g ? 'Edit group' : 'New group';
+      document.getElementById('gf-submit').textContent  = g ? 'Save changes' : 'Create group';
+      document.getElementById('gf-name').value          = g?.name ?? '';
+      document.getElementById('gf-danger').classList.toggle('hidden', !g);
+      document.getElementById('gf-back').onclick = () => g ? Nav.go('group') : Nav.go('home');
+
+      // Emoji grid
+      document.getElementById('gf-emoji-grid').innerHTML =
+        EMOJIS.map(e => `<div class="emoji-opt${e===this._emoji?' selected':''}" onclick="Screens.groupForm.pickEmoji('${e}')">${e}</div>`).join('');
+
+      Nav.go('group-form');
+    },
+
+    pickEmoji(e) {
+      this._emoji = e;
+      document.querySelectorAll('.emoji-opt').forEach(el =>
+        el.classList.toggle('selected', el.textContent === e));
+    },
+
+    save() {
+      const nameEl = document.getElementById('gf-name');
+      const name   = nameEl.value.trim();
+      if (!name) { nameEl.classList.add('is-error'); nameEl.focus(); return; }
+      nameEl.classList.remove('is-error');
+
+      if (this._editId) {
+        const g = getGroup(this._editId);
+        g.name = name; g.emoji = this._emoji;
+        touch(g);
+        State.groupId = g.id;
+        Nav.go('group');
+      } else {
+        const g = {
+          id: uid(), name, emoji: this._emoji,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          people: [], expenses: [], settlements: [],
+        };
+        appData.groups.push(g);
+        DB.save(appData);
+        State.groupId = g.id;
+        State.activeTab = 'expenses';
+        Nav.go('group');
+      }
+    },
+
+    confirmDelete() {
+      const g = getGroup(this._editId);
+      Modal.open('Delete group?',
+        `Permanently delete "${g?.name}"? All expenses will be lost.`,
+        [{ label:'Cancel', cls:'btn-ghost', fn:'Modal.close()' },
+         { label:'Delete', cls:'btn-danger', fn:'Screens.groupForm.doDelete()' }]);
+    },
+
+    doDelete() {
+      appData.groups = appData.groups.filter(g => g.id !== this._editId);
+      DB.save(appData);
+      Modal.close();
+      Nav.go('home');
+    },
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   GROUP SCREEN
+═══════════════════════════════════════════════════════════════════ */
+const Group = {
+  render() {
+    const g = getGroup(State.groupId);
+    if (!g) { Nav.go('home'); return; }
+
+    document.getElementById('group-title').textContent = `${g.emoji??''} ${g.name}`;
+    this.renderPeopleBar(g);
+
+    const tab = State.activeTab;
+    document.getElementById('tab-exp').classList.toggle('active', tab === 'expenses');
+    document.getElementById('tab-set').classList.toggle('active', tab === 'settlement');
+
+    if (tab === 'expenses')   this.renderExpenses(g);
+    else                      this.renderSettlement(g);
+  },
+
+  switchTab(tab) {
+    State.activeTab = tab;
+    this.render();
+  },
+
+  renderPeopleBar(g) {
+    const bar = document.getElementById('people-bar');
+    bar.innerHTML =
+      g.people.map(p => `<div class="chip">${esc(p.name)}</div>`).join('') +
+      `<button class="chip chip-add" onclick="Nav.go('people')">+ People</button>`;
+  },
+
+  renderExpenses(g) {
+    const body = document.getElementById('group-body');
+
+    if (!g.expenses.length) {
+      body.innerHTML = `
+        <div class="empty-state" style="padding:36px 28px">
+          <span class="empty-icon" style="font-size:42px;animation:none">🧾</span>
+          <h2>No expenses yet</h2>
+          <p>Add your first expense to start tracking who owes what.</p>
+          <button class="btn btn-outline mt-10" onclick="Wizard.start(null)">+ Add expense</button>
+        </div>`;
+      return;
+    }
+
+    // Group by month
+    const months = {};
+    for (const e of [...g.expenses].reverse()) {
+      const d   = new Date(e.date.length === 10 ? e.date + 'T12:00:00' : e.date);
+      const key = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      (months[key] = months[key] ?? []).push(e);
+    }
+
+    let h = '';
+    for (const [month, exps] of Object.entries(months)) {
+      h += `<div class="section-label">${month}</div>`;
+      for (const e of exps) {
+        const payers = e.payers.map(p => personName(g, p.personId)).join(', ');
+        h += `<div class="expense-row" onclick="Expenses.open('${e.id}')">
+          <div class="expense-info">
+            <div class="expense-name">${esc(e.name)}</div>
+            <div class="expense-meta">${fmtDate(e.date)} · Paid by ${esc(payers)}</div>
+          </div>
+          <div class="expense-amount">${fmtMoney(e.totalAmount)}</div>
+        </div>`;
+      }
+    }
+    h += `<button class="dashed-btn" onclick="Wizard.start(null)" style="margin-bottom:20px">
+      <span class="plus">+</span> Add expense
+    </button>`;
+    body.innerHTML = h;
+  },
+
+  renderSettlement(g) {
+    const body = document.getElementById('group-body');
+    const total = g.expenses.reduce((s,e) => s + e.totalAmount, 0);
+    const debts = getDebtsWithStatus(g);
+    const outstanding = debts.filter(d => !d.settled);
+    const settled     = debts.filter(d =>  d.settled);
+
+    let h = `<div class="settle-header">
+      <div class="settle-total-label">Total expenses</div>
+      <div class="settle-total-amount">${fmtMoney(total)}</div>
+      <div class="settle-total-sub">${g.people.length} people · ${g.expenses.length} expenses · ${outstanding.length} outstanding</div>
+    </div>`;
+
+    if (!g.expenses.length) {
+      h += `<div class="settled-all"><div class="icon">📋</div><h3>Nothing to settle</h3><p>Add expenses to see who owes what.</p></div>`;
+      body.innerHTML = h; return;
+    }
+
+    if (!outstanding.length && !settled.length) {
+      h += `<div class="settled-all"><div class="icon">🎉</div><h3>All square!</h3><p>No debts to show.</p></div>`;
+      body.innerHTML = h; return;
+    }
+
+    if (outstanding.length) {
+      h += `<div class="section-label">Outstanding</div>`;
+      for (const d of outstanding) {
+        h += `<div class="debt-row" id="dr-${d.fromId}-${d.toId}">
+          <div class="debt-names">
+            <div class="debt-from">${esc(personName(g, d.fromId))}</div>
+            <div class="debt-to">owes ${esc(personName(g, d.toId))}</div>
+          </div>
+          <div class="debt-amount">${fmtMoney(d.amount)}</div>
+          <button class="settle-btn" onclick="Settlement.mark('${d.fromId}','${d.toId}',${d.amount})">Settle</button>
+        </div>`;
+      }
+    }
+
+    if (settled.length) {
+      h += `<div class="section-label" style="margin-top:2px">Settled</div>`;
+      for (const d of settled) {
+        h += `<div class="debt-row is-settled">
+          <div class="debt-names">
+            <div class="debt-from">${esc(personName(g, d.fromId))}</div>
+            <div class="debt-to">paid ${esc(personName(g, d.toId))}</div>
+          </div>
+          <div class="debt-amount paid">${fmtMoney(d.amount)}</div>
+          <button class="settle-btn done" onclick="Settlement.unmark('${d.settlementId}')">✓ Done</button>
+        </div>`;
+      }
+    }
+
+    h += `<div class="share-bar">
+      <button class="btn btn-primary btn-full" onclick="Settlement.copyText()">Copy settlement summary</button>
+    </div>`;
+
+    body.innerHTML = h;
+
+    if (!outstanding.length && settled.length) {
+      setTimeout(() => Confetti.launch(), 80);
+    }
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   SETTLEMENT ACTIONS
+═══════════════════════════════════════════════════════════════════ */
+const Settlement = {
+  mark(fromId, toId, amount) {
+    const g = getGroup(State.groupId);
+    g.settlements = g.settlements ?? [];
+    g.settlements.push({
+      id: uid(), fromPersonId: fromId, toPersonId: toId,
+      amount, settledAt: new Date().toISOString(), active: true,
+    });
+    touch(g);
+
+    // Animate the row, then re-render
+    const row = document.getElementById(`dr-${fromId}-${toId}`);
+    if (row) {
+      row.classList.add('settling');
+      setTimeout(() => { Group.render(); Toast.show('Marked as settled'); }, 380);
+    } else {
+      Group.render(); Toast.show('Marked as settled');
+    }
+
+    // Check if all clear
+    const remaining = getDebtsWithStatus(g).filter(d => !d.settled);
+    if (!remaining.length) setTimeout(() => Confetti.launch(), 450);
+  },
+
+  unmark(settlementId) {
+    const g = getGroup(State.groupId);
+    const s = (g.settlements ?? []).find(s => s.id === settlementId);
+    if (s) { s.active = false; touch(g); }
+    Group.render(); Toast.show('Unmarked');
+  },
+
+  copyText() {
+    const g     = getGroup(State.groupId);
+    const debts = getDebtsWithStatus(g).filter(d => !d.settled);
+    const total = g.expenses.reduce((s,e) => s + e.totalAmount, 0);
+    const line  = '─'.repeat(28);
+    let txt = `${g.name} — settlement\n${line}\n`;
+    if (!debts.length) txt += 'All settled! 🎉\n';
+    else for (const d of debts)
+      txt += `${personName(g,d.fromId).padEnd(14)} owes ${personName(g,d.toId).padEnd(14)} ${fmtMoney(d.amount)}\n`;
+    txt += `${line}\nTotal expenses: ${fmtMoney(total)}`;
+
+    navigator.clipboard.writeText(txt)
+      .then(() => Toast.show('Copied to clipboard'))
+      .catch(() => Toast.show('Copy failed — try again'));
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   PEOPLE
+═══════════════════════════════════════════════════════════════════ */
+const People = {
+  render() {
+    const g    = getGroup(State.groupId);
+    const used = new Set();
+    for (const e of g.expenses) {
+      for (const p of e.payers) used.add(p.personId);
+      for (const s of e.splits) used.add(s.personId);
+    }
+
+    const list = document.getElementById('people-list');
+    if (!g.people.length) {
+      list.innerHTML = `<div class="section-label">No people yet — add some below</div>`;
+      return;
+    }
+
+    list.innerHTML = `<div class="section-label">Members (${g.people.length})</div>` +
+      g.people.map(p => `
+        <div class="person-row">
+          <div class="person-name">${esc(p.name)}</div>
+          <button class="person-remove" ${used.has(p.id)?'disabled title="Used in an expense"':''}
+            onclick="People.remove('${p.id}')">Remove</button>
+        </div>`).join('');
+  },
+
+  add() {
+    const inp  = document.getElementById('add-person-input');
+    const name = inp.value.trim();
+    if (!name) { inp.classList.add('is-error'); inp.focus(); return; }
+    inp.classList.remove('is-error');
+
+    const g = getGroup(State.groupId);
+    if (g.people.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+      Toast.show('Already in group'); return;
+    }
+    g.people.push({ id: uid(), name });
+    touch(g);
+    inp.value = '';
+    this.render();
+    Toast.show(`${name} added`);
+  },
+
+  remove(pid) {
+    const g = getGroup(State.groupId);
+    g.people = g.people.filter(p => p.id !== pid);
+    touch(g);
+    this.render();
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXPENSES
+═══════════════════════════════════════════════════════════════════ */
+const Expenses = {
+  open(eid) {
+    State.expenseId = eid;
+    this.render();
+    Nav.go('expense-detail');
+  },
+
+  render() {
+    const g   = getGroup(State.groupId);
+    const exp = getExpense(State.groupId, State.expenseId);
+    if (!exp) { Nav.go('group'); return; }
+
+    document.getElementById('detail-nav-title').textContent = exp.name;
+    document.getElementById('detail-body').innerHTML = `
+      <div class="detail-hero">
+        <div class="detail-amount">${fmtMoney(exp.totalAmount)}</div>
+        <div class="detail-date">${fmtDate(exp.date)}</div>
+      </div>
+      <div class="review-block">
+        <div class="review-block-title">Paid by</div>
+        ${exp.payers.map(p=>`<div class="review-line"><span>${esc(personName(g,p.personId))}</span><span class="review-val">${fmtMoney(p.amount)}</span></div>`).join('')}
+      </div>
+      <div class="review-block">
+        <div class="review-block-title">Split</div>
+        ${exp.splits.filter(s=>s.amount>0).map(s=>`<div class="review-line"><span>${esc(personName(g,s.personId))}</span><span class="review-val">${fmtMoney(s.amount)}</span></div>`).join('')}
+      </div>`;
+  },
+
+  confirmDelete() {
+    const exp = getExpense(State.groupId, State.expenseId);
+    Modal.open('Delete expense?',
+      `Remove "${exp?.name}"? This cannot be undone.`,
+      [{ label:'Cancel', cls:'btn-ghost', fn:'Modal.close()' },
+       { label:'Delete', cls:'btn-danger', fn:'Expenses.doDelete()' }]);
+  },
+
+  doDelete() {
+    const g = getGroup(State.groupId);
+    g.expenses = g.expenses.filter(e => e.id !== State.expenseId);
+    touch(g);
+    Modal.close();
+    State.activeTab = 'expenses';
+    Nav.go('group');
+    Toast.show('Expense deleted');
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXPENSE WIZARD
+═══════════════════════════════════════════════════════════════════ */
+const Wizard = {
+  W: {}, // state
+
+  start(expenseId) {
+    const g   = getGroup(State.groupId);
+    const exp = expenseId ? getExpense(State.groupId, expenseId) : null;
+    State.expenseId = expenseId;
+
+    if (exp) {
+      this.W = {
+        step: 1, editId: expenseId,
+        name: exp.name, totalCents: exp.totalAmount, date: exp.date,
+        multiPayer: exp.payers.length > 1,
+        payers: JSON.parse(JSON.stringify(exp.payers)),
+        splits: JSON.parse(JSON.stringify(exp.splits)),
+      };
+    } else {
+      const me  = settings.me
+        ? g.people.find(p => p.name.toLowerCase() === settings.me.toLowerCase())
+        : null;
+      const def = me ?? g.people[0] ?? null;
+      this.W = {
+        step: 1, editId: null,
+        name: '', totalCents: 0, date: new Date().toISOString().split('T')[0],
+        multiPayer: false,
+        payers: def ? [{ personId: def.id, amount: 0 }] : [],
+        splits: g.people.map(p => ({ personId: p.id, amount: 0 })),
+      };
+    }
+
+    document.getElementById('wiz-title').textContent = exp ? 'Edit expense' : 'New expense';
+    this.render();
+    Nav.go('wizard');
+  },
+
+  render() {
+    const W    = this.W;
+    const g    = getGroup(State.groupId);
+    const back = document.getElementById('wiz-back');
+    const lbl  = document.getElementById('wiz-back-label');
+    const body = document.getElementById('wiz-body');
+    const foot = document.getElementById('wiz-footer');
+
+    // Progress pips
+    document.getElementById('wiz-progress').innerHTML =
+      [1,2,3,4].map(i => `<div class="pip ${i<=W.step?'done':''}"></div>`).join('');
+
+    if (W.step === 1) {
+      back.onclick = () => W.editId ? Expenses.open(W.editId) : Nav.go('group');
+      lbl.textContent = W.editId ? 'Cancel' : 'Back';
+      body.innerHTML = `
+        <div class="wizard-step-label">Step 1 — Basics</div>
+        <div class="section-pad">
+          <div class="field">
+            <div class="field-label">Expense name</div>
+            <input type="text" class="field-input" id="w-name" value="${esc(W.name)}"
+              placeholder="e.g. Dinner at La Palapa" maxlength="60"
+              onkeydown="if(event.key==='Enter')document.getElementById('w-total').focus()">
+          </div>
+          <div class="field">
+            <div class="field-label">Total amount</div>
+            <div class="amount-wrap">
+              <span class="amount-prefix">$</span>
+              <input type="number" class="field-input field-mono" id="w-total"
+                value="${W.totalCents ? (W.totalCents/100).toFixed(2) : ''}"
+                placeholder="0.00" min="0.01" step="0.01"
+                onkeydown="if(event.key==='Enter')Wizard.next()">
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">Date</div>
+            <input type="date" class="field-input field-mono" id="w-date" value="${W.date}">
+          </div>
+        </div>`;
+      foot.innerHTML = `<button class="btn btn-primary btn-full" onclick="Wizard.next()">Next — Who paid?</button>`;
+
+    } else if (W.step === 2) {
+      back.onclick = () => { W.step = 1; this.render(); };
+      lbl.textContent = 'Back';
+
+      if (!g.people.length) {
+        body.innerHTML = `<div class="section-pad">
+          <p style="color:var(--ink-muted);font-size:14px;line-height:1.55">Add people to this group before logging an expense.</p>
+          <button class="btn btn-outline mt-10" onclick="Nav.go('people')">Manage people</button>
+        </div>`;
+        foot.innerHTML = '';
+        return;
+      }
+
+      let h = `<div class="wizard-step-label">Step 2 — Who paid?</div>
+        <div style="padding:12px 20px;border-bottom:1px solid var(--rule)">
+          <div class="mode-toggle">
+            <div class="mode-opt ${!W.multiPayer?'active':''}" onclick="Wizard.setMode(false)">One payer</div>
+            <div class="mode-opt ${W.multiPayer?'active':''}" onclick="Wizard.setMode(true)">Split payment</div>
+          </div>
+        </div>`;
+
+      if (!W.multiPayer) {
+        // Single payer selector
+        h += g.people.map(p => {
+          const sel = W.payers[0]?.personId === p.id;
+          return `<div class="input-row" style="${sel?'background:var(--rust-pale)':''}" onclick="Wizard.pickPayer('${p.id}')">
+            <div class="input-row-name">${esc(p.name)}</div>
+            ${sel ? '<div class="input-row-badge">✓ Paying</div>' : ''}
+          </div>`;
+        }).join('');
+      } else {
+        // Multi-payer with amount inputs
+        h += `<div class="running-bar">
+          <span class="running-label">Payer amounts</span>
+          <span class="running-val" id="payer-rem">—</span>
+        </div>`;
+        h += g.people.map(p => {
+          const px  = W.payers.find(x => x.personId === p.id);
+          const val = px ? (px.amount/100).toFixed(2) : '0.00';
+          return `<div class="input-row">
+            <div class="input-row-name">${esc(p.name)}</div>
+            <div class="mini-wrap">
+              <span class="mini-prefix">$</span>
+              <input type="number" class="mini-input" value="${val}" min="0" step="0.01"
+                oninput="Wizard.updatePayer('${p.id}',this.value)" placeholder="0.00">
+            </div>
+          </div>`;
+        }).join('');
+      }
+      body.innerHTML = h;
+      if (W.multiPayer) this.refreshPayerRem();
+
+      foot.innerHTML = `
+        <button class="btn btn-ghost" style="flex:1" onclick="Wizard.goStep(1)">Back</button>
+        <button class="btn btn-primary" style="flex:2" onclick="Wizard.next()">Next — How to split?</button>`;
+
+    } else if (W.step === 3) {
+      back.onclick = () => { W.step = 2; this.render(); };
+      lbl.textContent = 'Back';
+
+      let h = `<div class="wizard-step-label">Step 3 — How to split?</div>
+        <div class="running-bar">
+          <span class="running-label">Remaining to assign</span>
+          <span class="running-val" id="split-rem">—</span>
+        </div>
+        <div class="shortcut-bar">
+          <button class="btn btn-ghost" onclick="Wizard.splitEqually()">Split equally</button>
+          <button class="btn btn-ghost" onclick="Wizard.splitByPayer()">Match payments</button>
+        </div>`;
+
+      h += g.people.map(p => {
+        const sp  = W.splits.find(s => s.personId === p.id) ?? { personId: p.id, amount: 0 };
+        const val = sp.amount ? (sp.amount/100).toFixed(2) : '0.00';
+        return `<div class="input-row">
+          <div class="input-row-name">${esc(p.name)}</div>
+          <div class="mini-wrap">
+            <span class="mini-prefix">$</span>
+            <input type="number" class="mini-input" value="${val}" min="0" step="0.01"
+              oninput="Wizard.updateSplit('${p.id}',this.value)" placeholder="0.00">
+          </div>
+        </div>`;
+      }).join('');
+      body.innerHTML = h;
+      this.refreshSplitRem();
+
+      foot.innerHTML = `
+        <button class="btn btn-ghost" style="flex:1" onclick="Wizard.goStep(2)">Back</button>
+        <button class="btn btn-primary" style="flex:2" onclick="Wizard.next()">Review</button>`;
+
+    } else if (W.step === 4) {
+      back.onclick = () => { W.step = 3; this.render(); };
+      lbl.textContent = 'Back';
+      const g2 = getGroup(State.groupId);
+
+      body.innerHTML = `
+        <div class="wizard-step-label">Step 4 — Review & save</div>
+        <div class="review-block">
+          <div class="review-block-title">Expense</div>
+          <div class="review-line"><span>${esc(W.name)}</span><span class="review-val">${fmtMoney(W.totalCents)}</span></div>
+          <div class="review-sub">${fmtDate(W.date)}</div>
+        </div>
+        <div class="review-block">
+          <div class="review-block-title">Paid by</div>
+          ${W.payers.map(p=>`<div class="review-line"><span>${esc(personName(g2,p.personId))}</span><span class="review-val">${fmtMoney(p.amount)}</span></div>`).join('')}
+        </div>
+        <div class="review-block">
+          <div class="review-block-title">Split</div>
+          ${W.splits.filter(s=>s.amount>0).map(s=>`<div class="review-line"><span>${esc(personName(g2,s.personId))}</span><span class="review-val">${fmtMoney(s.amount)}</span></div>`).join('')}
+        </div>`;
+
+      foot.innerHTML = `
+        <button class="btn btn-ghost" style="flex:1" onclick="Wizard.goStep(3)">Edit</button>
+        <button class="btn btn-primary" style="flex:2" onclick="Wizard.save()">${W.editId?'Save changes':'Add expense'}</button>`;
+    }
+  },
+
+  goStep(n) { this.W.step = n; this.render(); },
+
+  setMode(multi) {
+    const W = this.W;
+    const g = getGroup(State.groupId);
+    W.multiPayer = multi;
+    if (!multi) {
+      // Pick "me" or first person
+      const me  = settings.me ? g.people.find(p=>p.name.toLowerCase()===settings.me.toLowerCase()) : null;
+      const pid = (me ?? g.people[0])?.id;
+      W.payers  = pid ? [{ personId: pid, amount: W.totalCents }] : [];
+    } else {
+      // Spread into all people, preserving any existing amounts
+      W.payers = g.people.map(p => {
+        const ex = W.payers.find(x=>x.personId===p.id);
+        return { personId: p.id, amount: ex?.amount ?? 0 };
+      });
+    }
+    W.step = 2; this.render();
+  },
+
+  pickPayer(pid) {
+    this.W.payers = [{ personId: pid, amount: this.W.totalCents }];
+    this.W.step = 2; this.render();
+  },
+
+  updatePayer(pid, val) {
+    const cents = toCents(val);
+    const idx   = this.W.payers.findIndex(p=>p.personId===pid);
+    if (idx >= 0) this.W.payers[idx].amount = cents;
+    else this.W.payers.push({ personId: pid, amount: cents });
+    this.refreshPayerRem();
+  },
+
+  refreshPayerRem() {
+    const tot = this.W.payers.reduce((s,p)=>s+p.amount, 0);
+    const rem = this.W.totalCents - tot;
+    const el  = document.getElementById('payer-rem');
+    if (!el) return;
+    el.textContent = rem===0 ? '✓ Balanced' : rem>0 ? `${fmtMoney(rem)} left` : `${fmtMoney(-rem)} over`;
+    el.className   = 'running-val ' + (rem===0?'ok':rem<0?'over':'under');
+  },
+
+  updateSplit(pid, val) {
+    const cents = toCents(val);
+    const idx   = this.W.splits.findIndex(s=>s.personId===pid);
+    if (idx >= 0) this.W.splits[idx].amount = cents;
+    else this.W.splits.push({ personId: pid, amount: cents });
+    this.refreshSplitRem();
+  },
+
+  refreshSplitRem() {
+    const tot = this.W.splits.reduce((s,x)=>s+x.amount, 0);
+    const rem = this.W.totalCents - tot;
+    const el  = document.getElementById('split-rem');
+    if (!el) return;
+    el.textContent = rem===0 ? '✓ Balanced' : rem>0 ? `${fmtMoney(rem)} unassigned` : `${fmtMoney(-rem)} over`;
+    el.className   = 'running-val ' + (rem===0?'ok':rem<0?'over':'under');
+  },
+
+  splitEqually() {
+    const g = getGroup(State.groupId);
+    const n = g.people.length;
+    if (!n) return;
+    const base = Math.floor(this.W.totalCents / n);
+    const rem  = this.W.totalCents - base * n;
+    // Remainder goes to last person alphabetically (spec requirement)
+    const sorted = [...g.people].sort((a,b) => a.name.localeCompare(b.name));
+    const lastId = sorted[sorted.length - 1].id;
+    this.W.splits = g.people.map(p => ({
+      personId: p.id, amount: base + (p.id === lastId ? rem : 0)
+    }));
+    this.render();
+  },
+
+  splitByPayer() {
+    const g = getGroup(State.groupId);
+    this.W.splits = g.people.map(p => {
+      const px = this.W.payers.find(x=>x.personId===p.id);
+      return { personId: p.id, amount: px?.amount ?? 0 };
+    });
+    this.render();
+  },
+
+  next() {
+    const W = this.W;
+    const g = getGroup(State.groupId);
+
+    if (W.step === 1) {
+      const nameEl  = document.getElementById('w-name');
+      const totalEl = document.getElementById('w-total');
+      const dateEl  = document.getElementById('w-date');
+      const name    = nameEl.value.trim();
+      const cents   = toCents(totalEl.value);
+
+      if (!name) { nameEl.classList.add('is-error'); nameEl.focus(); return; }
+      nameEl.classList.remove('is-error');
+      if (cents <= 0) { totalEl.classList.add('is-error'); totalEl.focus(); return; }
+      totalEl.classList.remove('is-error');
+
+      W.name = name; W.totalCents = cents;
+      W.date = dateEl.value || new Date().toISOString().split('T')[0];
+      if (!W.multiPayer && W.payers.length) W.payers[0].amount = cents;
+
+      if (!g.people.length) {
+        Modal.open('No people yet',
+          'Add people to this group before adding an expense.',
+          [{ label:'Add people', cls:'btn-outline', fn:"Modal.close();Nav.go('people')" }]);
+        return;
+      }
+    }
+
+    if (W.step === 2 && W.multiPayer) {
+      const payerTotal = W.payers.reduce((s,p)=>s+p.amount,0);
+      if (payerTotal !== W.totalCents) {
+        Toast.show(`Payer amounts must total ${fmtMoney(W.totalCents)}`); return;
+      }
+    }
+
+    if (W.step === 3) {
+      const splitTotal = W.splits.reduce((s,x)=>s+x.amount,0);
+      if (splitTotal !== W.totalCents) {
+        Toast.show(`Splits must total ${fmtMoney(W.totalCents)}`); return;
+      }
+    }
+
+    W.step++;
+    this.render();
+  },
+
+  save() {
+    const W = this.W;
+    const g = getGroup(State.groupId);
+
+    if (W.editId) {
+      const exp = g.expenses.find(e=>e.id===W.editId);
+      Object.assign(exp, { name:W.name, totalAmount:W.totalCents, date:W.date,
+        payers:W.payers, splits:W.splits });
+    } else {
+      g.expenses.push({ id:uid(), name:W.name, date:W.date,
+        totalAmount:W.totalCents, payers:W.payers, splits:W.splits });
+    }
+    touch(g);
+    Toast.show(W.editId ? 'Expense updated' : 'Expense added');
+    State.activeTab = 'expenses';
+    Nav.go('group');
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════════════════════ */
+const Modal = {
+  open(title, body, actions) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').textContent  = body;
+    document.getElementById('modal-actions').innerHTML = actions.map(a =>
+      `<button class="btn ${a.cls} btn-full" onclick="${a.fn}">${a.label}</button>`).join('');
+    document.getElementById('modal').classList.add('open');
+  },
+  close() { document.getElementById('modal').classList.remove('open'); },
+  onOverlay(e) { if (e.target === document.getElementById('modal')) this.close(); },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════════════ */
+const Toast = {
+  _t: null,
+  show(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(this._t);
+    this._t = setTimeout(() => el.classList.remove('show'), 2500);
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONFETTI
+═══════════════════════════════════════════════════════════════════ */
+const Confetti = {
+  launch() {
+    const canvas = document.getElementById('confetti-canvas');
+    canvas.style.display = 'block';
+    const ctx = canvas.getContext('2d');
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const colors = ['#C0442A','#6B9B7A','#F7F4EE','#D8D0C4','#F5EAE7','#1A1714'];
+    const parts  = Array.from({ length: 90 }, () => ({
+      x: Math.random() * canvas.width, y: -12,
+      vx: (Math.random() - 0.5) * 5,
+      vy: Math.random() * 3.5 + 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      w: Math.random() * 7 + 3, h: Math.random() * 5 + 2,
+      rot: Math.random() * 360, rv: (Math.random() - 0.5) * 9,
+    }));
+
+    let frame = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of parts) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot * Math.PI / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+        ctx.restore();
+        p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.rot += p.rv;
+      }
+      if (++frame < 140) requestAnimationFrame(draw);
+      else { canvas.style.display = 'none'; ctx.clearRect(0,0,canvas.width,canvas.height); }
+    };
+    draw();
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+═══════════════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') Modal.close();
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════════════════ */
+Screens.home.render();
+</script>
+</body>
+</html>
