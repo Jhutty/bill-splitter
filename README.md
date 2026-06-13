@@ -28,11 +28,10 @@ Splitter is a single-file web app for splitting shared expenses. Open it, create
 ## Demo / Screenshots
 
 <p align="center">
-  <img src="assets/HomeScreen.png" width="240" alt="Home Screen" />
-  <img src="assets/ExpenseWizard.png" width="240" alt="Expense Wizard" />
-  <img src="assets/Settlement.png" width="240" alt="Settlement" />
+  <img src="assets/HomeScreen.png" width="250" alt="Home Screen" />
+  <img src="assets/ExpenseWizard.png" width="250" alt="Expense Wizard" />
+  <img src="assets/Settlement.png" width="250" alt="Settlement" />
 </p>
----
 
 ## Usage
 
